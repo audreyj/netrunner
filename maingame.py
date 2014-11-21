@@ -1,4 +1,4 @@
-import gamemods, os, sys
+import gamemods, cards, os, sys
 
 class gameboard(object):
 	def __init__(self):
@@ -8,21 +8,49 @@ class gameboard(object):
 		self.rplayer.gameboard = self
 		self.continuerun = True
 		
+	def LoadDeck(self, player, deckname):
+		possibles = {'HB':cards.HBdeck,'WC':cards.WCdeck,'NBN':cards.NBNdeck,
+			'Jinteki': cards.Jdeck,'Natural':cards.naturaldeck, 
+			'Cyborg':cards.cyborgdeck, 'Noise':cards.noisedeck, 
+			'runnerdeck':cards.defaultrunnerdeck,'corpdeck':cards.defaultcorpdeck}
+		self.TellPlayer("Populated the deck with:", player.type)
+		newlist = []
+		for key in possibles.keys():
+			if key.lower() in deckname.lower(): #if the key is in the input, use that deck
+				for card in possibles[key]:
+					player.deck.add(card())
+				self.TellPlayer(key + ': ' + str(len(possibles[key])), player.type)
+				newlist.extend(list(set(possibles[key])))
+				if 'runner' not in key and 'corp' not in key:
+					player.identity = key
+		for i,card in enumerate(player.deck.cards):
+			card.player = player
+			card.id = i
+		for card in newlist: #reference deck for read-only
+			player.referencedeck.add(card())
+		for card in player.referencedeck.cards:
+			card.player = player
+		player.deck.shuffle()
+		player.deck.deal([player.hand], player.handlimit)
+		self.TellPlayer(player.hand, player.type)
+		if self.GetFromPlayer(player.type, 'y/n', "Mulligan? > "):
+			player.deck.mulligan(player.hand)	
+		
 	def ShowOpponent(self, callertype):
 		if callertype == 'runner':
-			self.cplayer.showopts("status")
+			self.cplayer.showopts("status", 'opponent')
 			for server in self.cplayer.serverlist:
-				print server.describeserver(False)
+				self.TellPlayer(server.describeserver(False),'runner')
 		else:
-			self.rplayer.showopts("status")
-			self.rplayer.showmyboard()
+			self.rplayer.showopts("status", 'opponent')
+			self.rplayer.showmyboard('opponent')
 		
 	def StartRun(self, servernum, bypass=False):
 		chosenserver = self.cplayer.serverlist[servernum-1]
 		icecounter = len(chosenserver.Icelist.cards)
 		self.winrun=True
 		while self.winrun and icecounter:
-			print "Approaching outermost Ice card..."
+			self.TellPlayer("Approaching outermost Ice card...", 'runner')
 			icecounter -= 1
 			icecard=chosenserver.Icelist.cards[icecounter]
 			os.system('cls')
@@ -33,18 +61,18 @@ class gameboard(object):
 				self.rplayer.breaksubroutines(icecard)
 				icecard.cardaction()
 				icecard.ResetIce()
-			if icecounter and gamemods.ask_yes_no("Jack out? "):
+			if icecounter and self.GetFromPlayer('runner','y/n',"Jack out? > "):
 				self.winrun = False
 				icecounter = 0
 		return self.winrun
 		
 	def AccessCall(self, chosencard, location, skiptrash = True):
-		print chosencard
+		self.TellPlayer(chosencard, 'runner')
 		if chosencard.type == 'Agenda':
-			print "You've stolen %s! You gained %d agenda points." %(chosencard.name, chosencard.agendapoints)
+			self.TellPlayer("You've stolen %s! You gained %d agenda points." %(chosencard.name, chosencard.agendapoints), 'runner')
 			self.rplayer.score += chosencard.agendapoints
 			if self.rplayer.score >= 7: 
-				print "Runner player reaches 7 agenda points and wins"
+				self.TellPlayer("Runner player reaches 7 agenda points and wins", 'bothplayers')
 				sys.exit(0)
 			location.give(chosencard, self.rplayer.ScoredCards)
 			if chosencard.installedin:
@@ -57,16 +85,16 @@ class gameboard(object):
 		if skiptrash and 'RunnerAccessed' in dir(chosencard):
 			chosencard.RunnerAccessed()
 		if skiptrash and chosencard.trashcost != '<None>':
-			print "Pay %d Credits to trash this card?" %chosencard.trashcost
-			if gamemods.ask_yes_no("> ") and self.rplayer.checkdo(0,chosencard.trashcost):
+			self.TellPlayer("Pay %d Credits to trash this card?" %chosencard.trashcost, 'runner')
+			if self.GetFromPlayer('runner','y/n',"> ") and self.rplayer.checkdo(0,chosencard.trashcost):
 				chosencard.trashaction(True, location)
 		else:
-			print "Nothing to be done with this card, returning it..."
+			self.TellPlayer("Nothing to be done with this card, returning it...",'runner')
 		
 	def AccessCards(self, servernum, numcards=1):
 		chosenserver = self.cplayer.serverlist[servernum-1]
-		print "Run Successful, Accessed " +str(chosenserver)
-		print "Accessing Installed Cards..." 
+		self.TellPlayer("Run Successful, Accessed " +str(chosenserver),'runner')
+		self.TellPlayer("Accessing Installed Cards...",'runner')
 		cardlist = chosenserver.installed.cards
 		numaccessible = len(cardlist)
 		while numaccessible:
@@ -79,78 +107,97 @@ class gameboard(object):
 					reply += "==== A FACEDOWN CARD ===="
 				if card.currentpoints:
 					reply += " [==== %d token(s)====]" %card.currentpoints
-			print reply
-			num = gamemods.ask_number("Choose card: ", 1, len(cardlist)+1)
-			if num:
-				self.AccessCall(cardlist[num-1], chosenserver.installed)
+			self.TellPlayer(reply, 'runner')
+			num = self.GetFromPlayer('runner','asknum',"Choose card: ", 1, len(cardlist)+1)
+			self.AccessCall(cardlist[num-1], chosenserver.installed)
 			numaccessible -= 1
-		print "No installed cards to access"
+		self.TellPlayer("No installed cards to access", 'runner')
 		if servernum == 1: #HQ server
 			handlen = len(self.cplayer.hand.cards)
-			print "Pick a card from 1 to " + str(handlen)
-			ans = gamemods.ask_number("> ", 1, handlen+1)
-			if ans:
-				self.AccessCall(self.cplayer.hand.cards[ans-1], self.cplayer.hand)
+			self.TellPlayer("Pick a card from 1 to " + str(handlen),'runner')
+			ans = self.GetFromPlayer('runner','asknum',"> ", 1, handlen+1)
+			self.AccessCall(self.cplayer.hand.cards[ans-1], self.cplayer.hand)
 		elif servernum == 2: #R&D server
 			for i in range(numcards):
-				print "Accessing a card from R&D..."
+				self.TellPlayer("Accessing a card from R&D...",'runner')
 				self.AccessCall(self.cplayer.deck.cards[i], self.cplayer.deck)
 		elif servernum == 3: #Archives
-			print "Accessing Archives..."
+			self.TellPlayer("Accessing Archives...",'runner')
 			for card in self.cplayer.archivepile.cards:
 				self.AccessCall(card, self.cplayer.archivepile, False)
 				
 	def StartTrace(self, basetrace):
-		print "Corporation initiates trace"
-		print "Add credits to enhance trace? (%d base)" %basetrace
-		print "Your current credits: " + str(self.cplayer.numcredits)
-		addt=gamemods.ask_number("Credits to add: ",0,self.cplayer.numcredits+1)
-		atk = basetrace +addt
-		print "Corporation trace strength: %d" %atk
-		links = self.rplayer.numlinks
-		print "Runner Link strength: %d" %links
-		if links >= atk:
-			print "Runner avoids trace"
-			return False
+		self.TellPlayer("Corporation initiates trace",'bothplayers')
+		self.TellPlayer("Add credits to enhance trace? (%d base)" %basetrace, 'corp')
+		self.TellPlayer("Your current credits: " + str(self.cplayer.numcredits), 'corp')
+		addt=self.GetFromPlayer('corp','asknum',"Credits to add: ",0,self.cplayer.numcredits+1)
+		if addt == 'cancel': return False
 		else:
-			print "Your current credits: " + str(self.rplayer.numcredits)
-			question = "Pay %d credits to avoid trace? " %(atk-links)
-			if gamemods.ask_yes_no(question) and self.rplayer.checkdo(0,atk-links):
-				print "Runner pays to avoid trace"
+			atk = basetrace +addt
+			self.TellPlayer("Corporation trace strength: %d" %atk,'bothplayers')
+			links = self.rplayer.numlinks
+			self.TellPlayer("Runner Link strength: %d" %links,'bothplayers')
+			if links >= atk:
+				self.TellPlayer("Runner avoids trace",'bothplayers')
 				return False
 			else:
-				self.rplayer.numtags += 1
-				print "Runner receives 1 tag"
-				return True
+				self.TellPlayer("Your current credits: " + str(self.rplayer.numcredits),'runner')
+				question = "Pay %d credits to avoid trace? " %(atk-links)
+				if self.GetFromPlayer('runner','y/n',question) and self.rplayer.checkdo(0,atk-links):
+					self.TellPlayer("Runner pays to avoid trace", 'bothplayers')
+					return False
+				else:
+					self.rplayer.numtags += 1
+					self.TellPlayer("Runner receives 1 tag",'bothplayers')
+					return True
 		
 	def DoDamage(self, amt, type):
 		if type=='brain':
-			print "Runner player takes %d brain damage" %amt
+			self.TellPlayer("Runner player takes %d brain damage" %amt,'bothplayers')
 			if self.rplayer.handlimit < amt:
-				print "RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES"
+				self.TellPlayer("RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES",'bothplayers')
 				sys.exit(0)
 			self.rplayer.handlimit -= amt
 		else:
 			if type == 'net' and self.rplayer.PreventCheck('netdamage'): amt-=1
-			print "Runner player takes %d net/meat damage" %amt
+			self.TellPlayer("Runner player takes %d net/meat damage" %amt,'bothplayers')
 			if len(self.rplayer.hand.cards)<amt:
-				print "RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES"
+				self.TellPlayer("RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES",'bothplayers')
 				sys.exit(0)
 			for dmg in range(amt):
 				self.rplayer.showopts('hand')
-				ans = 0
-				while not ans:
-					ans = gamemods.ask_number("Discard which card? ", 1, len(self.rplayer.hand.cards)+1)
+				ans = self.GetFromPlayer('runner', 'asknum', "Discard which card? ", 1, len(self.rplayer.hand.cards)+1)
 				self.rplayer.hand.cards[ans-1].trashaction(False)
 		
 	def ExposeCard(self):
 		pass
 		
+	def TellPlayer(self, what, whichplayer='activeplayer'):
+		print whichplayer+": ", what, "/ ("+whichplayer+")"
+		
+	def GetFromPlayer(self, player, prompt, question='', low=0, high=1):
+		response = None
+		if prompt == 'y/n':
+			while response not in ("y","n","yes","no"):
+				response = raw_input(question).lower()
+			if response in ('y','yes'): response = True
+			elif response in ('n','no'): response = False
+		elif prompt == 'asknum':
+			a = range(low, high)
+			a.append('cancel')
+			while response not in a:
+				response = raw_input(question)
+				try: response = int(response)
+				except: pass
+		else:
+			response = raw_input(prompt).lower()
+		return response
+	
 	def playgame(self):
 		os.system('cls')
-		self.cplayer.firstturn('corpdeck','NBN')
+		self.LoadDeck(self.cplayer, 'corpdeckHB')
 		os.system('cls')
-		self.rplayer.firstturn('runnerdeck','natural')
+		self.LoadDeck(self.rplayer, 'runnerdecknatural')
 		os.system('cls')
 		while self.cplayer.score<7 and self.rplayer.score<7:
 			self.cplayer.playturn()

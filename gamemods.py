@@ -1,78 +1,30 @@
-import corpcards, runnercards, os
+import os
 
 class Hand(object):
 	def __init__(self):
-		#Keep track of the cards in this hand
 		self.cards = []
 	
-	def __str__(self):
-		#Return a string representing the hand
+	def __str__(self): #Return a string representing the hand
+		reply = ""
 		if self.cards:
-			reply = ""
 			for i,card in enumerate(self.cards):
 				reply += "\n(" + str(i+1) +") " + str(card)
 		else: 
 			reply = "<empty>"
 		return reply 
-	
-	def clear(self):
-		#Reset to an empty hand
-		self.cards = []
 		
-	def add(self, card):
-		#Add specified card to this hand
+	def add(self, card): 
 		self.cards.append(card)
 		
 	def give(self, card, other_hand):
-		#Remove the specified card from this hand
-		# Add it to a different hand
 		self.cards.remove(card)
 		other_hand.add(card)
 		
 class Deck(Hand):
-	def populate(self, cardtype):
-		print "Populated the deck with:"
-		if 'corpdeck' in cardtype:
-			for card in corpcards.defaultcorpdeck:
-				self.add(card())
-			print "Corporation default: "+str(len(corpcards.defaultcorpdeck))	
-			if 'HB' in cardtype:
-				for card in corpcards.HBdeck:
-					self.add(card())
-				print "Haas-Biodroid cards: " + str(len(corpcards.HBdeck))
-			elif 'NBN' in cardtype: 
-				for card in corpcards.NBNdeck:
-					self.add(card())
-				print "NBN cards: " + str(len(corpcards.NBNdeck))
-			elif 'WC' in cardtype: 
-				for card in corpcards.WCdeck:
-					self.add(card())
-				print "Weyland Corporation cards: " + str(len(corpcards.WCdeck))
-		elif 'runnerdeck' in cardtype:
-			for card in runnercards.defaultrunnerdeck:
-				self.add(card())
-			print "Runner default: " + str(len(runnercards.defaultrunnerdeck))
-			if 'natural' in cardtype.lower():
-				for card in runnercards.naturaldeck:
-					self.add(card())
-				print "Natural cards: " + str(len(runnercards.naturaldeck))
-			
-	def refdeck(self, cardtype):
-		if cardtype == 'corpdeckHB':
-			newlist = list(set(corpcards.defaultcorpdeck + corpcards.HBdeck))	
-		elif cardtype == 'corpdeckWC':
-			newlist = list(set(corpcards.defaultcorpdeck + corpcards.WCdeck))
-		elif cardtype == 'corpdeckNBN':
-			newlist = list(set(corpcards.defaultcorpdeck + corpcards.NBNdeck))
-		if cardtype == 'runnerdecknatural':
-			newlist = list(set(runnercards.shortdeck + runnercards.naturaldeck))
-		for card in newlist:
-				self.add(card())
-				
 	def shuffle(self):
 		import random
 		random.shuffle(self.cards)
-		print "Shuffled the deck"
+		return "Shuffled the deck"
 	
 	def deal(self, hands, per_hand=5):
 		for rounds in range(per_hand):
@@ -81,13 +33,14 @@ class Deck(Hand):
 					top_card = self.cards[0]
 					self.give(top_card, hand)
 				else:
-					print "Out of cards!"
+					return "Out of cards!"
 					
 	def mulligan(self, hand):
+		originallen = len(hand.cards)
 		while len(hand.cards):
 			hand.give(hand.cards[len(hand.cards)-1], self)
 		self.shuffle()
-		self.deal([hand], 5)
+		self.deal([hand], originallen)
 
 class Server(object):
 	def __init__(self):
@@ -156,6 +109,7 @@ class Player(object):
 	def __init__(self):
 		self.gameboard = ''
 		self.identity = ''
+		self.type = ''
 		self.score=0
 		self.numcredits=5
 		self.handlimit=5
@@ -173,126 +127,125 @@ class Player(object):
 	def checkdo(self, clickcost, creditcost):
 		reply = False
 		if self.numclicks<clickcost:
-			print "Not Enough Clicks for this action!"
+			self.tellplayer("Not Enough Clicks for this action!")
 		elif self.numcredits<creditcost:
-			print "Not Enough Credits for this action!"
+			self.tellplayer("Not Enough Credits for this action!")
 		else:
 			if clickcost or creditcost: 
-				print "You paid %d click(s) and %d credit(s)." %(clickcost, creditcost)
+				self.tellplayer("You paid %d click(s) and %d credit(s)." %(clickcost, creditcost))
 			self.numclicks -= clickcost
 			self.numcredits -= creditcost
 			reply = True
 		return reply
 	
-	def showopts(self,opt=''):
+	def tellplayer(self, what, who=''):
+		if who=='opponent' and self.type=='runner':
+			self.gameboard.TellPlayer(what, 'corp')
+		elif who=='opponent' and self.type=='corp':
+			self.gameboard.TellPlayer(what, 'runner')
+		else:
+			self.gameboard.TellPlayer(what, self.type)
+	
+	def asknum(self, question, low, high):
+		return self.gameboard.GetFromPlayer(self.type, 'asknum', question, low, high)
+		
+	def yesno(self, question):
+		return self.gameboard.GetFromPlayer(self.type, 'y/n', question)
+	
+	def showopts(self,opt='', who=''):
+		returnlist = []
 		if opt == 'status':
-			self.mystatus()
-			print "| Number of Clicks = %d" %self.numclicks
-			print "| Number of Credits = %d" %self.numcredits
-			print "| Hand limit = %d" %self.handlimit
-			print "| Current # of cards = %d" %len(self.hand.cards)
-			print "| Agenda Points Scored = %d" %self.score
+			for thing in self.mystatus():
+				returnlist.append(thing)
+			returnlist.append("| Number of Clicks = %d" %self.numclicks)
+			returnlist.append("| Number of Credits = %d" %self.numcredits)
+			returnlist.append("| Hand limit = %d" %self.handlimit)
+			returnlist.append("| Current # of cards = %d" %len(self.hand.cards))
+			returnlist.append("| Agenda Points Scored = %d" %self.score)
 		elif opt in ['enemy','opponent']:
 			self.gameboard.ShowOpponent(self.type)
 		elif opt in ['hand','cards']:
-			print "------- Player's Hand --------"
-			print self.hand
+			returnlist.append("------- Player's Hand --------")
+			returnlist.append(self.hand)
 		elif opt.isdigit():
 			try:
 				self.hand.cards[int(opt)-1].readcard()
 			except:
-				print "Invalid card number"
+				returnlist.append("Invalid card number")
 		elif opt == 'board':
 			self.showmyboard()
 		elif opt == 'archives':
-			print self.archivepile
-		elif opt == 'all':
+			returnlist.append(self.archivepile)
+		elif opt in ['all', 'deck']:
 			for i,card in enumerate(self.referencedeck.cards):
-				print "("+str(i+1)+") " + str(card)
-			choice = ask_number("Choose card: ", 1, len(self.referencedeck.cards)+1)
-			if choice:
-				self.referencedeck.cards[choice-1].readcard()
+				self.tellplayer("("+str(i+1)+") " + str(card))
+			choice = self.asknum("Choose card: ", 1, len(self.referencedeck.cards)+1)
+			self.referencedeck.cards[choice-1].readcard()
 		else:
-			print "Valid SHOW objects: HAND, STATUS, ARCHIVES, BOARD"
+			returnlist.append("Valid SHOW objects: HAND, STATUS, DECK, ARCHIVES, BOARD")
+		for thing in returnlist:
+			self.tellplayer(thing, who)
 	
 	def drawcard(self, clickcost=1):
 		if clickcost not in range(0,4): clickcost = 1
-		print 'Draw 1 card from R&D'
+		self.tellplayer('Draw 1 card')
 		if self.checkdo(clickcost, 0):
 			self.deck.deal([self.hand],1)
 			self.turnsummary.append('Drew a card')
 			
 	def takecredit(self, clickcost=1):
-		print 'Gain 1 credit from bank'
+		self.tellplayer('Gain 1 credit from bank')
 		if clickcost not in range(0,4): clickcost = 1
 		if self.checkdo(clickcost, 0):
 			self.numcredits += 1
 			self.turnsummary.append('Took a credit from the bank')
-			print "Number of Credits: " +str(self.numcredits)
+			self.tellplayer("Number of Credits: " +str(self.numcredits))
 
 	def playcard(self, cardnum=0, clickcost=1):
 		if cardnum == 0:
-			print "Cards on the board that you can play: " 
+			self.tellplayer("Cards on the board that you can play: ") 
 			for i,card in enumerate(self.playablecardlist):
-				print "("+str(i+1)+") " + str(card)
-			choice = ask_number("Choose card to Play: ", 1, len(self.playablecardlist)+1)
-			if not choice: return 0
+				self.tellplayer("("+str(i+1)+") " + str(card))
+			choice = self.asknum("Choose card to Play: ", 1, len(self.playablecardlist)+1)
+			if choice == 'cancel': return 0
 			chosencard = self.playablecardlist[choice-1]
 		elif int(cardnum) in range(1, len(self.hand.cards)+1):		
 			chosencard = self.hand.cards[int(cardnum)-1]
 			if chosencard.type not in ['Operation', 'Event']:
-				print "Did you mean to INSTALL this card?  It can't be PLAYED"
+				self.tellplayer("Did you mean to INSTALL this card?  It can't be PLAYED")
 				return 0
 		else:
-			print "Not the right card?"
+			self.tellplayer("Not the right card?")
 			return False
 		if 'cardaction' in dir(chosencard):
-			print "Play " + chosencard.name
+			self.tellplayer("Play " + chosencard.name)
 			self.turnsummary.append('Played ' +str(chosencard))
 			chosencard.cardaction()
 			if chosencard.subtype == 'Transaction' and self.identity=='WC':
-				print "WC Power: Gain 1 credit"
+				self.tellplayer("WC Power: Gain 1 credit")
 				self.takecredit(0)
 	
 	def installcard(self, cardnum=0): #install something
 		try:
 			chosencard = self.hand.cards[int(cardnum)-1]
 		except:
-			print "Non-valid card choice"
+			self.tellplayer("Non-valid card choice")
 			return 0
 		if chosencard.type in ['Operation', 'Event']:
-			print "Did you mean to PLAY this card?"
+			self.tellplayer("Did you mean to PLAY this card?")
 		else:
-			print "Installing " + str(chosencard)
+			self.tellplayer("Installing " + str(chosencard))
 			chosencard.InstallAction()
 	
 	def trashmine(self, opt=''):
 		chosencard = self.choosefromboard(True)
 		if chosencard:
 			question = "Really trash " +str(chosencard.name) +"??" 
-			if ask_yes_no(question):
+			if self.gameboard.GetFromPlayer('y/n', question):
 				if not chosencard.installedin:
 					chosencard.faceup = False
 				chosencard.trashaction(chosencard.faceup)
 				self.turnsummary.append('Trashed a card')
-	
-	def firstturn(self, deckname, id):
-		self.deck.populate(deckname+id)
-		self.identity=id
-		for i,card in enumerate(self.deck.cards):
-			card.player = self
-			card.id = i
-		self.referencedeck.refdeck(deckname+id)
-		self.deck.shuffle()
-		self.deck.deal([self.hand], self.handlimit)
-		tempmull = 3
-		while tempmull:
-			print self.hand
-			if ask_yes_no("Mulligan? (%d Mulligans remain) => "%tempmull):
-				self.deck.mulligan(self.hand)
-				tempmull -= 1
-			else: 
-				tempmull = 0
 	
 	def TurnStart(self):	
 		self.firstcall = True
@@ -303,29 +256,57 @@ class Player(object):
 	
 	def TurnEnd(self):
 		while len(self.hand.cards)>self.handlimit:
-			print "You have too many cards in your hand."
+			self.tellplayer("You have too many cards in your hand.")
 			self.showopts('hand')
-			ans = 0
-			while not ans:
-				ans = ask_number("Discard which card? ", 1, len(self.hand.cards)+1)
+			ans = self.asknum("Discard which card? ", 1, len(self.hand.cards)+1)
 			self.hand.cards[ans-1].trashaction()
 		for dothing in self.TurnEndActions:
 			dothing()
 		os.system('cls')
-		print "-------- Opponent Turn Summary ---------"
+		self.tellplayer("-------- Opponent Turn Summary ---------", 'opponent')
 		for thing in self.turnsummary:
-			print "  - " + thing
-	
-	
+			self.tellplayer("  - " + thing, 'opponent')
+
+	def playturn(self):
+		self.tellplayer("---------- It Is Your Turn (%s) -------------" %self.type)
+		self.numclicks = self.totalclicks
+		self.TurnStart()	
+		if self.type == 'corp': self.drawcard(0)
+		while 1:
+			self.tellplayer("-----------------------------------------------")
+			self.tellplayer("It is %s turn.  You have %d clicks remaining." %(self.type, self.numclicks))
+			if not self.numclicks:
+				self.tellplayer("(Type 'end' to end your turn)")
+			userinput = self.gameboard.GetFromPlayer(self.type,'> ')
+			wordlist = userinput.split()
+			if not self.numclicks and wordlist[0] =='end': break
+			elif wordlist[0] in self.actions:
+				do = self.actions[wordlist[0]]
+				#try:
+				do(*wordlist[1:])
+				#except: 
+				#	self.tellplayer("Not understanding your nouns")
+			else:
+				self.tellplayer("action not in list: ")
+				self.tellplayer(self.actions.keys())
+		self.TurnEnd()
+
+		
 class CorpPlayer(Player):
 	def __init__(self):
 		Player.__init__(self)
 		self.type = 'corp'
+		self.totalclicks = 3
 		self.serverlist = [hqserver(), rdserver(), archives()]		
+		self.actions = { "show": self.showopts, "advance":self.advancecard,
+					"install": self.installcard, "draw": self.drawcard,
+					"take": self.takecredit, "purge": self.purgevirus,
+					"trash": self.trashsomething, "play": self.playcard,
+					"rez": self.rezcard}
 	
-	def showmyboard(self):
+	def showmyboard(self, who=''):
 		for server in self.serverlist:
-				print server.describeserver()
+				self.tellplayer(server.describeserver(), who)
 	
 	def choosefromboard(self, showhand=False):
 		self.showopts("board")
@@ -342,48 +323,48 @@ class CorpPlayer(Player):
 			if card.installedin:
 				location = self.serverlist[card.installedin-1].name
 			else: location = "your hand"
-			print "("+ str(i+1)+") "+str(card)+" --> in "+location
-		choice = ask_number("Choose card: ", 1, len(cardlist)+1)
-		if not choice: return 0
+			self.tellplayer("("+ str(i+1)+") "+str(card)+" --> in "+location)
+		choice = self.asknum("Choose card: ", 1, len(cardlist)+1)
+		if choice == 'cancel': return 0
 		chosencard = cardlist[choice-1]
 		return chosencard
 	
 	def mystatus(self):
-		print "--------- Corporation Player ----------"
-		print "| Identity = Haas-Biodroid"
-		print "| ID Power = The first time you install a card each turn, gain 1 credit" 
-		print "| Remaining Cards in HQ = %d" %len(self.deck.cards)
-		print "| Number of Cards in Archives = %d" %len(self.archivepile.cards)
+		returnstring = ["--------- Corporation Player ----------"]
+		returnstring.append("| Identity = Haas-Biodroid")
+		returnstring.append("| ID Power = The first time you install a card each turn, gain 1 credit")
+		returnstring.append("| Remaining Cards in HQ = %d" %len(self.deck.cards))
+		returnstring.append("| Number of Cards in Archives = %d" %len(self.archivepile.cards))
+		return returnstring
 		
 	def advancecard(self, clickcost=1, amt=1): #advance a card
 		chosencard = self.choosefromboard()
 		if not chosencard: return 0
 		elif not chosencard.advancetotal: 
-			print "Not an advanceable card"
+			self.tellplayer("Not an advanceable card")
 			return 0
 		if self.checkdo(clickcost, 1):
 			chosencard.currentpoints += amt
 			self.turnsummary.append('Advanced a card')
-			print "Advanced %s" %chosencard.name
+			self.tellplayer("Advanced %s" %chosencard.name)
 			if chosencard.advancetotal <= chosencard.currentpoints:
 				chosencard.ScoreAction()
 		
 	def purgevirus(self, opt): #purge virus counters
-		print 'purge virus counters'
+		self.tellplayer('purge virus counters')
 		self.turnsummary.append('purged virus counters')
 		clickcost = 3
 		creditcost = 0
 	
 	def trashsomething(self, opt=''): #trash a card from somewhere
 		if not opt:
-			print "One of your cards, or one of your opponent's?"
-			print "\t (1) One of mine \n\t (2) One of the runner's"
-			opt = ask_number("> ", 1, 3)
-			if not choice: return False
+			self.tellplayer("One of your cards, or one of your opponent's?")
+			self.tellplayer("\t (1) One of mine \n\t (2) One of the runner's")
+			opt = self.asknum("> ", 1, 3)
 		if opt == 1:
 			self.trashmine()
 		elif opt == 2:
-			print 'Trash 1 resource if runner is tagged'
+			self.tellplayer('Trash 1 resource if runner is tagged')
 			if self.gameboard.rplayer.numtags:
 				chosencard=1
 				while chosencard:
@@ -394,80 +375,52 @@ class CorpPlayer(Player):
 							self.turnsummary.append('Trashed %s' %chosencard)
 							chosencard = 0
 					else:
-						print "Not a resource card?"
+						self.tellplayer("Not a resource card?")
 			else: 
-				print "Runner is not tagged!"
+				self.tellplayer("Runner is not tagged!")
 		elif opt == 3: 
-			print "Trash one of the runner's programs"
+			self.tellplayer("Trash one of the runner's programs")
 			chosencard=1
 			while chosencard:
 				chosencard = self.gameboard.rplayer.choosefromboard()
 				if chosencard and chosencard.type == "Program":
-					print "Trashing " +str(chosencard)
+					self.tellplayer("Trashing " +str(chosencard))
 					chosencard.trashaction()
 					chosencard = 0
-		else: print "Whaaaaaaaaat"
+		else: self.tellplayer("You didn't make a valid choice, I'm cancelling out.")
 
 	def rezcard(self, opt=''): #rez a card that's on the board already
 		chosencard = self.choosefromboard()
 		if not chosencard: return 0
 		elif chosencard.faceup or chosencard.rezcost == '<None>':
-			print "This card does not need rezzing"
+			self.tellplayer("This card does not need rezzing")
 			return 0
 		elif self.checkdo(0, chosencard.rezcost):
 			chosencard.faceup = True
 			chosencard.RezAction()
 			self.turnsummary.append('Rezzed ' +str(chosencard))
-			print "Rezzed %s" %chosencard.name
+			self.tellplayer("Rezzed %s" %chosencard.name)
 			
 	def RunActions(self, servernum, icecounter):
 		actions = { "show": self.showopts, "play": self.playcard,
 					"rez": self.rezcard}
 		chosenserver = self.serverlist[servernum-1]
 		while 1:
-			print "---------------------------"
-			print "Runner is making a run on: " + str(chosenserver)
-			print "Approaching Ice #" + str(icecounter+1)
-			print "Take an action? (Type 'end' when done)"
-			userinput = raw_input('> ').lower()
+			self.tellplayer("---------------------------")
+			self.tellplayer("Runner is making a run on: " + str(chosenserver))
+			self.tellplayer("Approaching Ice #" + str(icecounter+1))
+			self.tellplayer("Take an action? (Type 'end' when done)")
+			userinput = self.gameboard.GetFromPlayer('corp','> ')
 			wordlist = userinput.split()
 			if wordlist[0] == 'end': return 0
 			elif wordlist[0] in actions:
 				do = actions[wordlist[0]]
 				do(*wordlist[1:])
 			else:
-				print "action not in list: "
-				print actions.keys()
+				self.tellplayer("action not in list: ")
+				self.tellplayer(actions.keys())
 				
-	def playturn(self):
-		actions = { "show": self.showopts, "advance":self.advancecard,
-					"install": self.installcard, "draw": self.drawcard,
-					"take": self.takecredit, "purge": self.purgevirus,
-					"trash": self.trashsomething, "play": self.playcard,
-					"rez": self.rezcard}
-		print "---------- Start Corporation Turn -------------"
-		self.numclicks = 3
-		self.TurnStart()	
-		self.drawcard(0)
-		while 1:
-			print "-----------------------------------------------"
-			print "It is Corp turn.  You have %d clicks remaining." %self.numclicks
-			if not self.numclicks:
-				print "(Type 'end' to end your turn)"
-			userinput = raw_input('> ').lower()
-			wordlist = userinput.split()
-			if not self.numclicks and wordlist[0] =='end': break
-			elif wordlist[0] in actions:
-				do = actions[wordlist[0]]
-				#try:
-				do(*wordlist[1:])
-				#except: 
-				#	print "Not understanding your nouns" 
-			else:
-				print "action not in list: "
-				print actions.keys()
-		self.TurnEnd()
-				
+
 class RunnerPlayer(Player):
 	def __init__(self):
 		Player.__init__(self)
@@ -479,55 +432,61 @@ class RunnerPlayer(Player):
 		self.numlinks = 1
 		self.usedcardslist = []
 		self.preventset = {}
+		self.totalclicks = 4
+		self.actions = { "show": self.showopts, "run": self.standardrun,
+					"install": self.installcard, "draw": self.drawcard,
+					"take": self.takecredit, "remove": self.removetags,
+					"trash": self.trashmine, "play": self.playcard}
 		
-	def mystatus(self):
-		print "---------------- Runner Player ---------------"
-		print "| Identity: Kate McCaffrey (Natural)"
-		print "| ID Power: First install cost on hardware or program -1"
-		print "| Program Memory Limit: %d" %self.programlimit
-		print "| Current Memory Usage: %d" %self.memoryused
-		print "| Current Number of Tags: %d" %self.numtags
-		print "| Current Link Strength: %d" %self.numlinks
+	def mystatus(self): #separate out identities and powers
+		returnstring = ["---------------- Runner Player ---------------"]
+		returnstring.append("| Identity: Kate McCaffrey (Natural)")
+		returnstring.append("| ID Power: First install cost on hardware or program -1")
+		returnstring.append("| Program Memory Limit: %d" %self.programlimit)
+		returnstring.append("| Current Memory Usage: %d" %self.memoryused)
+		returnstring.append("| Current Number of Tags: %d" %self.numtags)
+		returnstring.append("| Current Link Strength: %d" %self.numlinks)
+		return returnstring
 		
-	def showmyboard(self):	
-		print "-------------- Runner's Rig -------------"
+	def showmyboard(self, who=''):	
+		self.tellplayer("-------------- Runner's Rig -------------", who)
 		for card in self.boardhand.cards:
-			print "\n\t-> "+str(card),
 			if card.currentpoints:
-				print "  [=== %d Token(s) ===]" %card.currentpoints,
-		print "\n"		
+				self.tellplayer("\n\t-> %s  [=== %d Token(s) ===]" %(str(card), card.currentpoints), who)
+			else:
+				self.tellplayer("\n\t->"+str(card), who)
 	
 	def choosefromboard(self, showhand=False):
 		cardlist = []
 		i=0
 		for card in self.boardhand.cards:
 			cardlist.append(card)
-			print "("+ str(i+1)+") "+str(card)
+			self.tellplayer("("+ str(i+1)+") "+str(card))
 			i += 1
 		if showhand:
 			for card in self.hand.cards:
 				cardlist.append(card)
-				print "("+ str(i+1)+") "+str(card)+" (in your hand)"
+				self.tellplayer("("+ str(i+1)+") "+str(card)+" (in your hand)")
 				i += 1
-		choice = ask_number("Choose card: ", 1, len(cardlist)+1)
-		if not choice: return 0
+		choice = self.asknum("Choose card: ", 1, len(cardlist)+1)
+		if choice == 'cancel': return 0
 		chosencard = cardlist[choice-1]
 		return chosencard 
 	
 	def removetags(self, opt=''):
 		if self.numtags and self.checkdo(1,2):
 			self.numtags -= 1
-			print "Removed one tag"
+			self.tellplayer("Removed one tag")
 			self.turnsummary.append('Removed a tag')
 	
-	def PreventCheck(self, var):
+	def PreventCheck(self, var): #check with player to prevent damage
 		reply = False
 		cardlist = [x for x in self.preventset.keys() if self.preventset[x]==var]
 		while cardlist:
 			for i,card in enumerate(cardlist):
-				print "\t (0) - Do nothing"
-				print "\t ("+str(i+1)+") - Play " + str(card)
-			ans = ask_number("> ", 0, len(cardlist)+1)
+				self.tellplayer("\t (0) - Do nothing")
+				self.tellplayer("\t ("+str(i+1)+") - Play " + str(card))
+			ans = self.asknum("> ", 0, len(cardlist)+1)
 			if not ans:
 				break
 			elif cardlist[ans-1].cardaction():
@@ -538,12 +497,12 @@ class RunnerPlayer(Player):
 	def breaksubroutines(self, ice):
 		self.usedcardslist = []
 		while 1: 
-			print "You've encountered ice - time to get to breaking"
+			self.tellplayer("You've encountered ice - time to get to breaking")
 			ice.printsubroutines()
-			print "Use commands 'show', 'play', or 'spend'"
-			print "(Type 'end' when done)"
+			self.tellplayer("Use commands 'show', 'play', or 'spend'")
+			self.tellplayer("(Type 'end' when done)")
 			choosebreak=False
-			userinput = raw_input('> ').lower()
+			userinput = self.gameboard.GetFromPlayer('runner','> ')
 			wordlist = userinput.split()
 			if wordlist[0] == 'end': return 0
 			elif wordlist[0] == 'show':
@@ -560,74 +519,29 @@ class RunnerPlayer(Player):
 					self.usedcardslist.append(chosencard)
 					choosebreak=True
 			else:
-				print "Invalid option for breaking, try again"
+				self.tellplayer("Invalid option for breaking, try again")
 			if choosebreak:
 				ice.printsubroutines()
-				s=ask_number("Break which subroutine: ", 1, len(ice.subroutines)+1)
-				if s:
-					ice.subroutines[s][1]=False
+				s=self.asknum("Break which subroutine: ", 1, len(ice.subroutines)+1)
+				ice.subroutines[s][1]=False
 	
-	def exposecard(self):
+	def exposecard(self): #not finished
 		self.gameboard.ShowOpponent('runner')
 		
 	def standardrun(self, clickcost=1):
 		if self.checkdo(clickcost,0):
 			self.gameboard.ShowOpponent('runner')
-			print '---------------------------'
+			self.tellplayer('---------------------------')
 			for i, server in enumerate(self.gameboard.cplayer.serverlist):
-				print "\t ("+str(i+1)+") "+str(server)
-			servernum = ask_number("Choose server to run on: ", 1, i+2)
-			if not servernum: return False
+				self.tellplayer("\t ("+str(i+1)+") "+str(server))
+			servernum = self.asknum("Choose server to run on: ", 1, i+2)
+			if servernum == 'cancel': return False
 			self.turnsummary.append('Made a run')
 			if self.gameboard.StartRun(servernum):
 				self.gameboard.AccessCards(servernum)
 			else:
-				print "Run Failed!"
+				self.tellplayer("Run Failed!")
 			for card in self.usedcardslist:
 				card.Reset()
 	
-	def playturn(self):
-		actions = { "show": self.showopts, "run": self.standardrun,
-					"install": self.installcard, "draw": self.drawcard,
-					"take": self.takecredit, "remove": self.removetags,
-					"trash": self.trashmine, "play": self.playcard}
-		print "---------- Start Runner Turn -------------"
-		self.numclicks = 4
-		self.TurnStart()	
-		while 1:
-			print "-----------------------------------------------"
-			print "It is Runner turn.  You have %d clicks remaining." %self.numclicks
-			if not self.numclicks:
-				print "(Type 'end' to end your turn)"
-			userinput = raw_input('> ').lower()
-			wordlist = userinput.split()
-			if not self.numclicks and wordlist[0]=='end': break
-			elif wordlist[0] in actions:
-				do = actions[wordlist[0]]
-				#try:
-				do(*wordlist[1:])
-				#except: 
-				#	print "Not understanding your nouns" 
-			else:
-				print "action not in list: "
-				print actions.keys()
-		self.TurnEnd()
-		
-def ask_yes_no(question):
-	response = None
-	while response not in ("y","n","yes","no"):
-		response = raw_input(question).lower()
-	if response in ('y','yes'): return True
-	elif response in ('n','no'): return False
 
-def ask_number(question, low, high):
-	response = None
-	while response not in range(low, high):
-		rawresponse = raw_input(question)
-		if rawresponse == 'cancel':
-			response = 0
-			break
-		try: response = int(rawresponse)
-		except: pass
-	return response 
-	
