@@ -1,3 +1,4 @@
+import sys
 import gamemods
 
 
@@ -225,7 +226,7 @@ class IceCard(corpcard):
         self.player.gameboard.winrun = False
 
     def InitTrace(self, opt=0, extra=''):
-        if self.player.gameboard.StartTrace(int(opt)) and reply:
+        if self.player.gameboard.StartTrace(int(opt)):
             self.ExtraAction()
 
     def LoseClick(self, opt=0, opt2=''):
@@ -918,12 +919,12 @@ class DataRaven(IceCard):
             self.player.gameboard.winrun = False
         if self.currentpoints:
             self.tellplayer("Pay tokens off Data Raven to tag runner?")
-            ans = gamemods.asknumber("> ", 0, self.currentpoints + 1)
+            ans = self.player.asknum("> ", 0, self.currentpoints + 1)
             if ans:
                 self.player.gameboard.rplayer.numtags += ans
-                self.currenpoints -= ans
+                self.currentpoints -= ans
 
-    def ExtraAction():
+    def ExtraAction(self):
         self.tellplayer("Place 1 token on Data Raven")
         self.currentpoints += 1
 
@@ -1536,6 +1537,7 @@ class Aesops(ResourceCard):
             chosencard = self.player.choosefromboard()
             if chosencard:
                 chosencard.trashaction()
+                self.tellplayer("Gained 3 credits")
                 self.player.numcredits += 3
         else:
             self.tellplayer("Cannot play this now")

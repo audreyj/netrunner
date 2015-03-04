@@ -147,19 +147,25 @@ class Player(object):
             reply = True
         return reply
 
-    def tellplayer(self, what, who=''):
+    def who_check(self, who=''):
         if who == 'opponent' and self.type == 'runner':
-            self.gameboard.TellPlayer(what, 'corp')
+            return 'corp'
         elif who == 'opponent' and self.type == 'corp':
-            self.gameboard.TellPlayer(what, 'runner')
+            return 'runner'
         else:
-            self.gameboard.TellPlayer(what, self.type)
+            return self.type
 
-    def asknum(self, question, low, high):
-        return self.gameboard.GetFromPlayer(self.type, 'asknum', question, low, high)
+    def tellplayer(self, what, who=''):
+        t = self.who_check(who)
+        self.gameboard.TellPlayer(what, t)
 
-    def yesno(self, question):
-        return self.gameboard.GetFromPlayer(self.type, 'y/n', question)
+    def asknum(self, question, low, high, who=''):
+        t = self.who_check(who)
+        return self.gameboard.GetFromPlayer(t, 'asknum', question, low, high)
+
+    def yesno(self, question, who=''):
+        t = self.who_check(who)
+        return self.gameboard.GetFromPlayer(t, 'y/n', question)
 
     def showopts(self, opt='', who=''):
         returnlist = []
@@ -249,7 +255,7 @@ class Player(object):
     def trashmine(self, opt=''):
         chosencard = self.choosefromboard(True)
         if chosencard:
-            question = "Really trash " + str(chosencard.name) + "??"
+            question = "Really trash " + str(chosencard.name) + "?? "
             if self.gameboard.GetFromPlayer('y/n', question):
                 if not chosencard.installedin:
                     chosencard.faceup = False
@@ -336,7 +342,8 @@ class CorpPlayer(Player):
                 location = "your hand"
             self.tellplayer("(" + str(i + 1) + ") " + str(card) + " --> in " + location)
         choice = self.asknum("Choose card: ", 1, len(cardlist) + 1)
-        if choice == 'cancel': return 0
+        if choice == 'cancel':
+            return 0
         chosencard = cardlist[choice - 1]
         return chosencard
 
@@ -362,11 +369,13 @@ class CorpPlayer(Player):
             if chosencard.advancetotal <= chosencard.currentpoints:
                 chosencard.ScoreAction()
 
-    def purgevirus(self, opt):  # purge virus counters
+    def purgevirus(self, opt=''):  # purge virus counters
         self.tellplayer('purge virus counters')
         self.turnsummary.append('purged virus counters')
-        clickcost = 3
-        creditcost = 0
+        # clickcost = 3
+        # creditcost = 0
+        if self.checkdo(3, 0):
+            self.tellplayer("Purge.... not implemented ^_^")
 
     def trashsomething(self, opt=''):  # trash a card from somewhere
         if not opt:
@@ -380,7 +389,7 @@ class CorpPlayer(Player):
             if self.gameboard.rplayer.numtags:
                 chosencard = 1
                 while chosencard:
-                    chosencard = self.gameboard.rplayer.choosefromboard()
+                    chosencard = self.gameboard.rplayer.choosefromboard(False, 'opponent')
                     if chosencard and chosencard.type == 'Resource':
                         if self.checkdo(1, 2):
                             chosencard.trashaction()
@@ -394,11 +403,13 @@ class CorpPlayer(Player):
             self.tellplayer("Trash one of the runner's programs")
             chosencard = 1
             while chosencard:
-                chosencard = self.gameboard.rplayer.choosefromboard()
+                chosencard = self.gameboard.rplayer.choosefromboard(False, 'opponent')
                 if chosencard and chosencard.type == "Program":
                     self.tellplayer("Trashing " + str(chosencard))
                     chosencard.trashaction()
                     chosencard = 0
+                else:
+                    self.tellplayer("Not a Program card?")
         else:
             self.tellplayer("You didn't make a valid choice, I'm cancelling out.")
 
@@ -440,6 +451,17 @@ class RunnerPlayer(Player):
     def __init__(self):
         Player.__init__(self)
         self.type = 'runner'
+
+    def mystatus(self):  # separate out identities and powers
+        returnstring = ["---------------- Runner Player ---------------"]
+        returnstring.append("| Identity: Kate McCaffrey (Natural)")
+        returnstring.append("| ID Power: First install cost on hardware or program -1")
+        returnstring.append("| Program Memory Limit: %d" % self.programlimit)
+        returnstring.append("| Current Memory Usage: %d" % self.memoryused)
+        returnstring.append("| Current Number of Tags: %d" % self.numtags)
+        returnstring.append("| Current Link Strength: %d" % self.numlinks)
+        return returnstring
+
         self.programlimit = 4
         self.memoryused = 0
         self.boardhand = Hand()
@@ -452,17 +474,6 @@ class RunnerPlayer(Player):
                         "install": self.installcard, "draw": self.drawcard,
                         "take": self.takecredit, "remove": self.removetags,
                         "trash": self.trashmine, "play": self.playcard}
-
-    def mystatus(self):  # separate out identities and powers
-        returnstring = ["---------------- Runner Player ---------------"]
-        returnstring.append("| Identity: Kate McCaffrey (Natural)")
-        returnstring.append("| ID Power: First install cost on hardware or program -1")
-        returnstring.append("| Program Memory Limit: %d" % self.programlimit)
-        returnstring.append("| Current Memory Usage: %d" % self.memoryused)
-        returnstring.append("| Current Number of Tags: %d" % self.numtags)
-        returnstring.append("| Current Link Strength: %d" % self.numlinks)
-        return returnstring
-
     def showmyboard(self, who=''):
         self.tellplayer("-------------- Runner's Rig -------------", who)
         for card in self.boardhand.cards:
@@ -471,19 +482,19 @@ class RunnerPlayer(Player):
             else:
                 self.tellplayer("\n\t->" + str(card), who)
 
-    def choosefromboard(self, showhand=False):
+    def choosefromboard(self, showhand=False, who=''):
         cardlist = []
         i = 0
         for card in self.boardhand.cards:
             cardlist.append(card)
-            self.tellplayer("(" + str(i + 1) + ") " + str(card))
+            self.tellplayer("(" + str(i + 1) + ") " + str(card), who)
             i += 1
         if showhand:
             for card in self.hand.cards:
                 cardlist.append(card)
-                self.tellplayer("(" + str(i + 1) + ") " + str(card) + " (in your hand)")
+                self.tellplayer("(" + str(i + 1) + ") " + str(card) + " (in your hand)", who)
                 i += 1
-        choice = self.asknum("Choose card: ", 1, len(cardlist) + 1)
+        choice = self.asknum("Choose card: ", 1, len(cardlist) + 1, who)
         if choice == 'cancel': return 0
         chosencard = cardlist[choice - 1]
         return chosencard

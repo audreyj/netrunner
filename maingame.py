@@ -90,7 +90,7 @@ class gameboard(object):
         if skiptrash and 'RunnerAccessed' in dir(chosencard):
             chosencard.RunnerAccessed()
         if skiptrash and chosencard.trashcost != '<None>':
-            self.TellPlayer("Pay %d Credits to trash this card?" % chosencard.trashcost, 'runner')
+            self.TellPlayer("Pay %d Credits to trash %s?" % (chosencard.trashcost, chosencard.name), 'runner')
             if self.GetFromPlayer('runner', 'y/n', "> ") and self.rplayer.checkdo(0, chosencard.trashcost):
                 chosencard.trashaction(True, location)
         else:
@@ -174,7 +174,7 @@ class gameboard(object):
                 self.rplayer.showopts('hand')
                 ans = self.GetFromPlayer('runner', 'asknum', "Discard which card? ", 1,
                                          len(self.rplayer.hand.cards) + 1)
-                self.rplayer.hand.cards[ans - 1].trashaction(False)
+                self.rplayer.hand.cards[ans - 1].trashaction()
 
     def ExposeCard(self):
         pass
