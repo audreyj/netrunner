@@ -451,17 +451,6 @@ class RunnerPlayer(Player):
     def __init__(self):
         Player.__init__(self)
         self.type = 'runner'
-
-    def mystatus(self):  # separate out identities and powers
-        returnstring = ["---------------- Runner Player ---------------"]
-        returnstring.append("| Identity: Kate McCaffrey (Natural)")
-        returnstring.append("| ID Power: First install cost on hardware or program -1")
-        returnstring.append("| Program Memory Limit: %d" % self.programlimit)
-        returnstring.append("| Current Memory Usage: %d" % self.memoryused)
-        returnstring.append("| Current Number of Tags: %d" % self.numtags)
-        returnstring.append("| Current Link Strength: %d" % self.numlinks)
-        return returnstring
-
         self.programlimit = 4
         self.memoryused = 0
         self.boardhand = Hand()
@@ -474,6 +463,17 @@ class RunnerPlayer(Player):
                         "install": self.installcard, "draw": self.drawcard,
                         "take": self.takecredit, "remove": self.removetags,
                         "trash": self.trashmine, "play": self.playcard}
+
+    def mystatus(self):  # separate out identities and powers
+        returnstring = ["---------------- Runner Player ---------------"]
+        returnstring.append("| Identity: Kate McCaffrey (Natural)")
+        returnstring.append("| ID Power: First install cost on hardware or program -1")
+        returnstring.append("| Program Memory Limit: %d" % self.programlimit)
+        returnstring.append("| Current Memory Usage: %d" % self.memoryused)
+        returnstring.append("| Current Number of Tags: %d" % self.numtags)
+        returnstring.append("| Current Link Strength: %d" % self.numlinks)
+        return returnstring
+
     def showmyboard(self, who=''):
         self.tellplayer("-------------- Runner's Rig -------------", who)
         for card in self.boardhand.cards:
