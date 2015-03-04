@@ -98,8 +98,8 @@ class gameboard(object):
 
     def AccessCards(self, servernum, numcards=1):
         chosenserver = self.cplayer.serverlist[servernum - 1]
-        self.TellPlayer("Run Successful, Accessed " + str(chosenserver), 'runner')
-        self.TellPlayer("Accessing Installed Cards...", 'runner')
+        self.TellPlayer("Run Successful, Accessed " + str(chosenserver), 'bothplayers')
+        self.TellPlayer("Accessing Installed Cards...", 'bothplayers')
         cardlist = chosenserver.installed.cards
         numaccessible = len(cardlist)
         while numaccessible:
@@ -116,7 +116,7 @@ class gameboard(object):
             num = self.GetFromPlayer('runner', 'asknum', "Choose card: ", 1, len(cardlist) + 1)
             self.AccessCall(cardlist[num - 1], chosenserver.installed)
             numaccessible -= 1
-        self.TellPlayer("No installed cards to access", 'runner')
+        self.TellPlayer("No installed cards to access", 'bothplayers')
         if servernum == 1:  # HQ server
             handlen = len(self.cplayer.hand.cards)
             self.TellPlayer("Pick a card from 1 to " + str(handlen), 'runner')
@@ -124,10 +124,10 @@ class gameboard(object):
             self.AccessCall(self.cplayer.hand.cards[ans - 1], self.cplayer.hand)
         elif servernum == 2:  # R&D server
             for i in range(numcards):
-                self.TellPlayer("Accessing a card from R&D...", 'runner')
+                self.TellPlayer("Accessing a card from R&D...", 'bothplayers')
                 self.AccessCall(self.cplayer.deck.cards[i], self.cplayer.deck)
         elif servernum == 3:  # Archives
-            self.TellPlayer("Accessing Archives...", 'runner')
+            self.TellPlayer("Accessing Archives...", 'bothplayers')
             for card in self.cplayer.archivepile.cards:
                 self.AccessCall(card, self.cplayer.archivepile, False)
 
@@ -180,7 +180,7 @@ class gameboard(object):
         pass
 
     def TellPlayer(self, what, whichplayer='activeplayer'):
-        print(whichplayer + ": ", what, "/ (" + whichplayer + ")")
+        print(what, "/ (" + whichplayer + ")")
 
     def GetFromPlayer(self, player, prompt, question='', low=0, high=1):
         response = None

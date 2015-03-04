@@ -281,7 +281,7 @@ class AgendaCard(corpcard):
         self.installedin = 0
         self.advancetotal = 0
         self.type = 'Agenda: Scored'
-        self.player.turnsummary.append('Scored an Agenda')
+        self.player.turnsummary.append('Scored an Agenda: %s' % self.name)
 
 
 class UpgradeCard(corpcard):
@@ -309,6 +309,7 @@ class OperationCard(corpcard):
         clickcost = 1
         if self.player.checkdo(clickcost, self.rezcost):
             self.tellplayer("You played %s" % self.name)
+            self.player.turnsummary.append('Played ' + self.name)
             self.trashaction(True)
             reply = True
         return reply
@@ -557,8 +558,8 @@ class AggressiveSecretary(AssetCard):
 
     def RunnerAccessed(self):
         if self.currentpoints:
-            self.tellplayer(self.readcard())
-            self.tellplayer("There are %d tokens on Aggressive Secretary" % self.currentpoints)
+            self.tellplayer(self.readcard(), 'bothplayers')
+            self.tellplayer("There are %d tokens on Aggressive Secretary" % self.currentpoints, 'bothplayers')
             question = "CORP PLAYER: pay to activate Aggressive Secretary? > "
             if self.player.yesno(question) and self.player.checkdo(0, 2):
                 for i in range(self.currentpoints):
@@ -1359,7 +1360,7 @@ class Toolbox(HardwareCard):
         self.subtype = "Console"
         self.cardtext = "+2 Program Limit. +2 Link. 2 Recurring Credits, to be used to pay for icebreakers.  Limit 1 console per player."
         self.savenum = 0
-        self.takeaction = [self.Reset]
+        self.takeaction = [self.reup]
 
     def RezAction(self):
         self.tellplayer("Program Limit +2, Link +2")
@@ -1373,18 +1374,22 @@ class Toolbox(HardwareCard):
             self.tellplayer("Take 2 credits for ice breaking")
             self.savenum = self.player.numcredits
             self.player.numcredits += 2
-            self.currentpoints -= 2
+            self.currentpoints = 0
+            return True
         else:
             self.tellplayer("No credits on Toolbox to use!")
 
     def Reset(self, azero):
+        if self.player.numcredits >= self.savenum:
+            self.tellplayer("You have more credits now than when you started last run...")
+            self.tellplayer("Resetting to previous number of " + str(self.savenum))
+            self.player.numcredits = self.savenum
+
+    def reup(self, azero):
         if self.currentpoints < 2:
             self.tellplayer("Putting 2 credits back on Toolbox")
             self.currentpoints = 2
-            if self.player.numcredits >= self.savenum:
-                self.tellplayer("You have more credits now than when you started last run...")
-                self.tellplayer("Resetting to previous number of " + self.savenum)
-                self.player.numcredits = self.savenum
+        self.player.TurnStartActions.remove(self.reup)
 
 
 class Akamatsu(HardwareCard):
@@ -1585,12 +1590,16 @@ class MakersEye(EventCard):
         self.cardtext = "Make a run on R&D.  If successful, access 2 additional cards from R&D"
 
     def cardaction(self):
-        if self.player.checkdo(1, self.rezcost) and self.player.gameboard.StartRun(2):
-            self.player.turnsummary.append('    -> Card effect made a run')
-            self.player.gameboard.AccessCards(2, 3)
-            for card in self.player.usedcardslist:
-                card.Reset()
+        if self.player.checkdo(1, self.rezcost):
             self.trashaction()
+            self.player.turnsummary.append('    -> Card effect made a run on R&D')
+            if self.player.gameboard.StartRun(2):
+                self.player.turnsummary.append('    -> Run was successful, accessed extra cards')
+                self.player.gameboard.AccessCards(2, 3)
+                for card in self.player.usedcardslist:
+                    card.Reset()
+            else:
+                self.player.turnsummary.append('    -> Run Failed')
 
 
 class MagnumOpus(ProgramCard):

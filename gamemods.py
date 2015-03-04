@@ -191,15 +191,32 @@ class Player(object):
             self.showmyboard()
         elif opt == 'archives':
             returnlist.append(self.archivepile)
-        elif opt in ['all', 'deck']:
-            for i, card in enumerate(self.referencedeck.cards):
-                self.tellplayer("(" + str(i + 1) + ") " + str(card))
-            choice = self.asknum("Choose card: ", 1, len(self.referencedeck.cards) + 1)
-            self.referencedeck.cards[choice - 1].readcard()
         else:
-            returnlist.append("Valid SHOW objects: HAND, STATUS, DECK, ARCHIVES, BOARD")
+            returnlist.append("Valid SHOW objects: HAND, STATUS, OPPONENT, ARCHIVES, BOARD")
+            returnlist.append("To READ a particular card, try READ command")
         for thing in returnlist:
             self.tellplayer(thing, who)
+
+    def readcards(self, opt='', who=''):
+        if not opt:
+            choice = self.gameboard.GetFromPlayer(self.type, "Runner, or Corp? ")
+            if choice in ['runner', 'corp']:
+                opt = choice
+            else:
+                self.tellplayer("Whatever. Cancelling out.")
+                return 0
+        if opt in ['runner']:
+            for i, card in enumerate(self.gameboard.rplayer.referencedeck.cards):
+                self.tellplayer("(" + str(i + 1) + ") " + str(card))
+            choice = self.asknum("Choose card: ", 1, len(self.gameboard.rplayer.referencedeck.cards) + 1)
+            if choice == 'cancel': return 0
+            self.gameboard.rplayer.referencedeck.cards[choice - 1].readcard()
+        elif opt in ['corp']:
+            for i, card in enumerate(self.gameboard.cplayer.referencedeck.cards):
+                self.tellplayer("(" + str(i + 1) + ") " + str(card))
+            choice = self.asknum("Choose card: ", 1, len(self.gameboard.cplayer.referencedeck.cards) + 1)
+            if choice == 'cancel': return 0
+            self.gameboard.cplayer.referencedeck.cards[choice - 1].readcard()
 
     def drawcard(self, clickcost=1):
         if clickcost not in range(0, 4): clickcost = 1
@@ -234,7 +251,6 @@ class Player(object):
             return False
         if 'cardaction' in dir(chosencard):
             self.tellplayer("Play " + chosencard.name)
-            self.turnsummary.append('Played ' + str(chosencard))
             chosencard.cardaction()
             if chosencard.subtype == 'Transaction' and self.identity == 'WC':
                 self.tellplayer("WC Power: Gain 1 credit")
@@ -318,7 +334,27 @@ class CorpPlayer(Player):
                         "install": self.installcard, "draw": self.drawcard,
                         "take": self.takecredit, "purge": self.purgevirus,
                         "trash": self.trashsomething, "play": self.playcard,
-                        "rez": self.rezcard}
+                        "rez": self.rezcard, "read": self.readcards, "help": self.instr}
+
+    def instr(self, opt=''):
+        self.tellplayer("---------- Corp Player Command Options: ---------")
+        self.tellplayer("| SHOW + ________ : show something (costs nothing)")
+        self.tellplayer("|     -> STATUS   : shows your status (name, current credits, etc)")
+        self.tellplayer("|     -> OPPONENT : shows your opponent's status (name, current credits, etc)")
+        self.tellplayer("|     -> BOARD    : show your board")
+        self.tellplayer("|     -> HAND     : shows your current hand")
+        self.tellplayer("|     -> [number] : reads numbered card in your hand")
+        self.tellplayer("|     -> ARCHIVES : shows your archive pile")
+        self.tellplayer("| READ: opens dialogue to read card text from runner or corp")
+        self.tellplayer("| ADVANCE : advance a card, dialogue will open to choose from board")
+        self.tellplayer("| INSTALL + [number] : install numbered card from your hand")
+        self.tellplayer("| PLAY + _______ : if blank or other, opens dialogue to choose from board")
+        self.tellplayer("|     -> optional[number] : play a numbered card from your hand")
+        self.tellplayer("| REZ : opens second dialogue to rez card on board")
+        self.tellplayer("| PURGE: purge virus token")
+        self.tellplayer("| DRAW : draws a card from your R&D")
+        self.tellplayer("| TAKE : takes 1 credit from the bank")
+        self.tellplayer("| TRASH: opens second dialogue to trash either yours or runner's cards")
 
     def showmyboard(self, who=''):
         for server in self.serverlist:
@@ -462,7 +498,27 @@ class RunnerPlayer(Player):
         self.actions = {"show": self.showopts, "run": self.standardrun,
                         "install": self.installcard, "draw": self.drawcard,
                         "take": self.takecredit, "remove": self.removetags,
-                        "trash": self.trashmine, "play": self.playcard}
+                        "trash": self.trashmine, "play": self.playcard,
+                        "read": self.readcards, "help": self.instr}
+
+    def instr(self, opt=''):
+        self.tellplayer("---------- Runner Player Command Options: ---------")
+        self.tellplayer("| SHOW + ________ : show something (costs nothing)")
+        self.tellplayer("|     -> STATUS   : shows your status (name, current credits, etc)")
+        self.tellplayer("|     -> OPPONENT : shows your opponent's status (name, current credits, etc)")
+        self.tellplayer("|     -> BOARD    : show your board")
+        self.tellplayer("|     -> HAND     : shows your current hand")
+        self.tellplayer("|     -> [number] : reads numbered card in your hand")
+        self.tellplayer("|     -> ARCHIVES : shows your archive pile")
+        self.tellplayer("| READ: opens dialogue to read card text from runner or corp")
+        self.tellplayer("| RUN : opens second dialogue to begin a run on corp")
+        self.tellplayer("| INSTALL + [number] : install numbered card from your hand")
+        self.tellplayer("| PLAY + _______ : if blank or other, opens dialogue to choose from board")
+        self.tellplayer("|     -> optional[number] : play a numbered card from your hand")
+        self.tellplayer("| REMOVE: opens second dialogue to remove tags")
+        self.tellplayer("| DRAW : draws a card from your deck")
+        self.tellplayer("| TAKE : takes 1 credit from the bank")
+        self.tellplayer("| TRASH: opens second dialogue to trash a card")
 
     def mystatus(self):  # separate out identities and powers
         returnstring = ["---------------- Runner Player ---------------"]
@@ -562,12 +618,16 @@ class RunnerPlayer(Player):
             for i, server in enumerate(self.gameboard.cplayer.serverlist):
                 self.tellplayer("\t (" + str(i + 1) + ") " + str(server))
             servernum = self.asknum("Choose server to run on: ", 1, i + 2)
-            if servernum == 'cancel': return False
+            if servernum == 'cancel':
+                self.clicknum += 1
+                return False
             self.turnsummary.append('Made a run')
             if self.gameboard.StartRun(servernum):
+                self.turnsummary.append(" --> Run Succeeded")
                 self.gameboard.AccessCards(servernum)
             else:
                 self.tellplayer("Run Failed!")
+                self.turnsummary.append(" --> Run Failed")
             for card in self.usedcardslist:
                 card.Reset()
 	
