@@ -4,12 +4,11 @@ todo list:
 
 expose card
 
-toolbox et al: a runner can attempt a run, take credits from toolbox,
-abort or end the run without using them, and then use them later in their turn for other things
-
 experiental data: if a new ice is installed in upgraded server, it should be +1 str also.
 new extraction may be called after every subroutine.
 
 bad publicity
 
-install defaults to first card in hand? 
+install defaults to first card in hand?
+
+can a runner guess what cards are where in the corp's hand?

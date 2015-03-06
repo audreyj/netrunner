@@ -93,8 +93,11 @@ class gameboard(object):
             self.TellPlayer("Pay %d Credits to trash %s?" % (chosencard.trashcost, chosencard.name), 'runner')
             if self.GetFromPlayer('runner', 'y/n', "> ") and self.rplayer.checkdo(0, chosencard.trashcost):
                 chosencard.trashaction(True, location)
+                self.TellPlayer("Trashed %s" % chosencard.name, 'bothplayers')
+                self.rplayer.turnsummary.append("  -> Accessed and trashed %s" % chosencard.name)
         else:
-            self.TellPlayer("Nothing to be done with this card, returning it...", 'runner')
+            self.TellPlayer("Nothing to be done with this card, returning it...", 'bothplayers')
+            self.rplayer.turnsummary.append("  -> Accessed and returned")
 
     def AccessCards(self, servernum, numcards=1):
         chosenserver = self.cplayer.serverlist[servernum - 1]
@@ -155,6 +158,7 @@ class gameboard(object):
                 else:
                     self.rplayer.numtags += 1
                     self.TellPlayer("Runner receives 1 tag", 'bothplayers')
+                    self.rplayer.turnsummary("Runner received 1 tag")
                     return True
 
     def DoDamage(self, amt, type):
@@ -164,6 +168,7 @@ class gameboard(object):
                 self.TellPlayer("RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES", 'bothplayers')
                 sys.exit(0)
             self.rplayer.handlimit -= amt
+            self.rplayer.turnsummary.append("Runner took 1 brain damage")
         else:
             if type == 'net' and self.rplayer.PreventCheck('netdamage'): amt -= 1
             self.TellPlayer("Runner player takes %d net/meat damage" % amt, 'bothplayers')
@@ -175,6 +180,7 @@ class gameboard(object):
                 ans = self.GetFromPlayer('runner', 'asknum', "Discard which card? ", 1,
                                          len(self.rplayer.hand.cards) + 1)
                 self.rplayer.hand.cards[ans - 1].trashaction()
+                self.rplayer.turnsummary.append("Runner took 1 net/meat damage")
 
     def ExposeCard(self):
         pass

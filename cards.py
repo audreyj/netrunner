@@ -339,7 +339,7 @@ class ProgramCard(runnercard):
 
     def IBincreasestr(self, ice, factor=1):
         if ice.icestr > self.icestr:
-            question = "Pay %d credits to increase strength to equal ice? > " % (ice.icestr - self.icestr) * factor
+            question = "Pay %d credits to increase strength to equal ice? > " % ((ice.icestr - self.icestr) * factor)
             if self.player.yesno(question) and self.player.checkdo(0, (ice.icestr - self.icestr) * factor):
                 self.icestr = ice.icestr
 
