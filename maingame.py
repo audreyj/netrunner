@@ -2,6 +2,7 @@ import os
 import sys
 import gamemods
 import cards
+from subprocess import Popen, PIPE
 
 
 class gameboard(object):
@@ -11,6 +12,8 @@ class gameboard(object):
         self.rplayer = gamemods.RunnerPlayer()
         self.rplayer.gameboard = self
         self.continuerun = True
+        self.turnsummary = []
+        self.lastturn = []
 
     def LoadDeck(self, player, deckname):
         possibles = {'HB': cards.HBdeck, 'WC': cards.WCdeck, 'NBN': cards.NBNdeck,
@@ -73,8 +76,7 @@ class gameboard(object):
     def AccessCall(self, chosencard, location, skiptrash=True):
         self.TellPlayer(chosencard, 'runner')
         if chosencard.type == 'Agenda':
-            self.TellPlayer(
-                "You've stolen %s! You gained %d agenda points." % (chosencard.name, chosencard.agendapoints), 'runner')
+            self.TurnSummary("Runner stole %s and gained %d agenda points." % (chosencard.name, chosencard.agendapoints))
             self.rplayer.score += chosencard.agendapoints
             if self.rplayer.score >= 7:
                 self.TellPlayer("Runner player reaches 7 agenda points and wins", 'bothplayers')
@@ -85,7 +87,6 @@ class gameboard(object):
             chosencard.advancetotal = 0
             chosencard.type = "Agenda: Scored"
             chosencard.player = self.rplayer
-            self.rplayer.turnsummary.append('Scored ' + str(chosencard))
             return True
         if skiptrash and 'RunnerAccessed' in dir(chosencard):
             chosencard.RunnerAccessed()
@@ -93,15 +94,13 @@ class gameboard(object):
             self.TellPlayer("Pay %d Credits to trash %s?" % (chosencard.trashcost, chosencard.name), 'runner')
             if self.GetFromPlayer('runner', 'y/n', "> ") and self.rplayer.checkdo(0, chosencard.trashcost):
                 chosencard.trashaction(True, location)
-                self.TellPlayer("Trashed %s" % chosencard.name, 'bothplayers')
-                self.rplayer.turnsummary.append("  -> Accessed and trashed %s" % chosencard.name)
+                self.TurnSummary("  -> Accessed and trashed %s" % chosencard.name)
         else:
-            self.TellPlayer("Nothing to be done with this card, returning it...", 'bothplayers')
-            self.rplayer.turnsummary.append("  -> Accessed and returned")
+            self.TurnSummary("  -> Accessed and returned")
 
     def AccessCards(self, servernum, numcards=1):
         chosenserver = self.cplayer.serverlist[servernum - 1]
-        self.TellPlayer("Run Successful, Accessed " + str(chosenserver), 'bothplayers')
+        self.TurnSummary("Run Successful, Accessed " + str(chosenserver))
         self.TellPlayer("Accessing Installed Cards...", 'bothplayers')
         cardlist = chosenserver.installed.cards
         numaccessible = len(cardlist)
@@ -135,7 +134,7 @@ class gameboard(object):
                 self.AccessCall(card, self.cplayer.archivepile, False)
 
     def StartTrace(self, basetrace):
-        self.TellPlayer("Corporation initiates trace", 'bothplayers')
+        self.TurnSummary("Corporation initiates trace")
         self.TellPlayer("Add credits to enhance trace? (%d base)" % basetrace, 'corp')
         self.TellPlayer("Your current credits: " + str(self.cplayer.numcredits), 'corp')
         addt = self.GetFromPlayer('corp', 'asknum', "Credits to add: ", 0, self.cplayer.numcredits + 1)
@@ -147,43 +146,45 @@ class gameboard(object):
             links = self.rplayer.numlinks
             self.TellPlayer("Runner Link strength: %d" % links, 'bothplayers')
             if links >= atk:
-                self.TellPlayer("Runner avoids trace", 'bothplayers')
+                self.TurnSummary("Runner avoids trace")
                 return False
             else:
                 self.TellPlayer("Your current credits: " + str(self.rplayer.numcredits), 'runner')
                 question = "Pay %d credits to avoid trace? " % (atk - links)
                 if self.GetFromPlayer('runner', 'y/n', question) and self.rplayer.checkdo(0, atk - links):
-                    self.TellPlayer("Runner pays to avoid trace", 'bothplayers')
+                    self.TurnSummary("Runner pays to avoid trace")
                     return False
                 else:
                     self.rplayer.numtags += 1
-                    self.TellPlayer("Runner receives 1 tag", 'bothplayers')
-                    self.rplayer.turnsummary("Runner received 1 tag")
+                    self.TurnSummary("Runner received 1 tag")
                     return True
 
     def DoDamage(self, amt, type):
         if type == 'brain':
-            self.TellPlayer("Runner player takes %d brain damage" % amt, 'bothplayers')
+            self.TurnSummary("Runner takes %d brain damage" % amt)
             if self.rplayer.handlimit < amt:
                 self.TellPlayer("RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES", 'bothplayers')
                 sys.exit(0)
             self.rplayer.handlimit -= amt
-            self.rplayer.turnsummary.append("Runner took 1 brain damage")
         else:
             if type == 'net' and self.rplayer.PreventCheck('netdamage'): amt -= 1
-            self.TellPlayer("Runner player takes %d net/meat damage" % amt, 'bothplayers')
+            self.TurnSummary("Runner took %d %s damage" % (amt, type))
             if len(self.rplayer.hand.cards) < amt:
                 self.TellPlayer("RUNNER SUSTAINS FATAL DAMAGE ==> RUNNER LOSES", 'bothplayers')
                 sys.exit(0)
-            for dmg in range(amt):
-                self.rplayer.showopts('hand')
-                ans = self.GetFromPlayer('runner', 'asknum', "Discard which card? ", 1,
-                                         len(self.rplayer.hand.cards) + 1)
-                self.rplayer.hand.cards[ans - 1].trashaction()
-                self.rplayer.turnsummary.append("Runner took 1 net/meat damage")
+        for dmg in range(amt):
+            self.rplayer.showopts('hand')
+            ans = self.GetFromPlayer('runner', 'asknum', "Discard which card? ", 1,
+                                     len(self.rplayer.hand.cards) + 1)
+            self.rplayer.hand.cards[ans - 1].trashaction()
+
 
     def ExposeCard(self):
         pass
+
+    def TurnSummary(self, what):
+        self.turnsummary.append(what)
+        self.TellPlayer(what, 'summary')
 
     def TellPlayer(self, what, whichplayer='activeplayer'):
         print(what, "/ (" + whichplayer + ")")

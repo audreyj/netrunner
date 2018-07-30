@@ -131,17 +131,16 @@ class Player(object):
         self.TurnStartActions = []
         self.TurnEndActions = []
         self.playablecardlist = []
-        self.turnsummary = []
 
     def checkdo(self, clickcost, creditcost):
         reply = False
         if self.numclicks < clickcost:
-            self.tellplayer("Not Enough Clicks for this action!")
+            self.gameboard.TurnSummary(" ... Not Enough Clicks for this action!")
         elif self.numcredits < creditcost:
-            self.tellplayer("Not Enough Credits for this action!")
+            self.gameboard.TurnSummary(" ... Not Enough Credits for this action!")
         else:
             if clickcost or creditcost:
-                self.tellplayer("You paid %d click(s) and %d credit(s)." % (clickcost, creditcost))
+                self.gameboard.TurnSummary(" ... Paid %d click(s) and %d credit(s)." % (clickcost, creditcost))
             self.numclicks -= clickcost
             self.numcredits -= creditcost
             reply = True
@@ -152,6 +151,8 @@ class Player(object):
             return 'corp'
         elif who == 'opponent' and self.type == 'corp':
             return 'runner'
+        elif who == 'bothplayers':
+            return 'bothplayers'
         else:
             return self.type
 
@@ -220,17 +221,17 @@ class Player(object):
 
     def drawcard(self, clickcost=1):
         if clickcost not in range(0, 4): clickcost = 1
-        self.tellplayer('Draw 1 card')
+        # self.tellplayer('Draw 1 card')
         if self.checkdo(clickcost, 0):
             self.deck.deal([self.hand], 1)
-            self.turnsummary.append('Drew a card')
+            self.gameboard.TurnSummary('Drew a card')
 
     def takecredit(self, clickcost=1):
-        self.tellplayer('Gain 1 credit from bank')
+        # self.tellplayer('Gain 1 credit from bank')
         if clickcost not in range(0, 4): clickcost = 1
         if self.checkdo(clickcost, 0):
             self.numcredits += 1
-            self.turnsummary.append('Took a credit from the bank')
+            self.gameboard.TurnSummary('Took a credit from the bank')
             self.tellplayer("Number of Credits: " + str(self.numcredits))
 
     def playcard(self, cardnum=0, clickcost=1):
@@ -250,7 +251,7 @@ class Player(object):
             self.tellplayer("Not the right card?")
             return False
         if 'cardaction' in dir(chosencard):
-            self.tellplayer("Play " + chosencard.name)
+            self.gameboard.TurnSummary('Played ' + chosencard.name)
             chosencard.cardaction()
             if chosencard.subtype == 'Transaction' and self.identity == 'WC':
                 self.tellplayer("WC Power: Gain 1 credit")
@@ -265,7 +266,7 @@ class Player(object):
         if chosencard.type in ['Operation', 'Event']:
             self.tellplayer("Did you mean to PLAY this card?")
         else:
-            self.tellplayer("Installing " + str(chosencard))
+            # self.tellplayer("Installing " + str(chosencard))
             chosencard.InstallAction()
 
     def trashmine(self, opt=''):
@@ -275,12 +276,15 @@ class Player(object):
             if self.gameboard.GetFromPlayer('y/n', question):
                 if not chosencard.installedin:
                     chosencard.faceup = False
-                chosencard.trashaction(chosencard.faceup)
-                self.turnsummary.append('Trashed a card')
+                if self.type == 'runner':
+                    chosencard.trashaction()
+                else:
+                    chosencard.trashaction(chosencard.faceup)
 
     def TurnStart(self):
         self.firstcall = True
-        self.turnsummary = []
+        self.gameboard.lastturn = self.gameboard.turnsummary.copy()
+        self.gameboard.turnsummary = []
         # print self.TurnStartActions
         for dothing in self.TurnStartActions:
             dothing(0)
@@ -294,9 +298,9 @@ class Player(object):
         for dothing in self.TurnEndActions:
             dothing()
         os.system('cls')
-        self.tellplayer("-------- Opponent Turn Summary ---------", 'opponent')
-        for thing in self.turnsummary:
-            self.tellplayer("  - " + thing, 'opponent')
+        self.tellplayer("-------- Turn Summary ---------", 'bothplayers')
+        for thing in self.gameboard.turnsummary:
+            self.tellplayer("  - " + thing, 'bothplayers')
 
     def playturn(self):
         self.tellplayer("---------- It Is Your Turn (%s) -------------" % self.type)
@@ -312,6 +316,8 @@ class Player(object):
             wordlist = userinput.split()
             if not self.numclicks and wordlist[0] == 'end':
                 break
+            elif len(wordlist) == 0:
+                continue
             elif wordlist[0] in self.actions:
                 do = self.actions[wordlist[0]]
                 # try:
@@ -400,14 +406,13 @@ class CorpPlayer(Player):
             return 0
         if self.checkdo(clickcost, 1):
             chosencard.currentpoints += amt
-            self.turnsummary.append('Advanced a card')
-            self.tellplayer("Advanced %s" % chosencard.name)
+            self.gameboard.TurnSummary('Advanced a card')
+            # self.tellplayer("Advanced %s" % chosencard.name)
             if chosencard.advancetotal <= chosencard.currentpoints:
                 chosencard.ScoreAction()
 
     def purgevirus(self, opt=''):  # purge virus counters
-        self.tellplayer('purge virus counters')
-        self.turnsummary.append('purged virus counters')
+        self.gameboard.TurnSummary('purged virus counters')
         # clickcost = 3
         # creditcost = 0
         if self.checkdo(3, 0):
@@ -429,7 +434,7 @@ class CorpPlayer(Player):
                     if chosencard and chosencard.type == 'Resource':
                         if self.checkdo(1, 2):
                             chosencard.trashaction()
-                            self.turnsummary.append('Trashed %s' % chosencard)
+                            self.gameboard.TurnSummary('Corp uses tags to trash %s' % chosencard)
                             chosencard = 0
                     else:
                         self.tellplayer("Not a resource card?")
@@ -459,8 +464,7 @@ class CorpPlayer(Player):
         elif self.checkdo(0, chosencard.rezcost):
             chosencard.faceup = True
             chosencard.RezAction()
-            self.turnsummary.append('Rezzed ' + str(chosencard))
-            self.tellplayer("Rezzed %s" % chosencard.name)
+            self.gameboard.TurnSummary('Corp Rezzed ' + str(chosencard))
 
     def RunActions(self, servernum, icecounter):
         actions = {"show": self.showopts, "play": self.playcard,
@@ -558,8 +562,7 @@ class RunnerPlayer(Player):
     def removetags(self, opt=''):
         if self.numtags and self.checkdo(1, 2):
             self.numtags -= 1
-            self.tellplayer("Removed one tag")
-            self.turnsummary.append('Removed a tag')
+            self.gameboard.TurnSummary('Removed a tag')
 
     def PreventCheck(self, var):  # check with player to prevent damage
         reply = False
@@ -621,13 +624,13 @@ class RunnerPlayer(Player):
             if servernum == 'cancel':
                 self.clicknum += 1
                 return False
-            self.turnsummary.append('Made a run')
+            self.gameboard.TurnSummary('Made a run')
             if self.gameboard.StartRun(servernum):
-                self.turnsummary.append(" --> Run Succeeded")
+                self.gameboard.TurnSummary(" --> Run Succeeded")
                 self.gameboard.AccessCards(servernum)
             else:
                 self.tellplayer("Run Failed!")
-                self.turnsummary.append(" --> Run Failed")
+                self.gameboard.TurnSummary(" --> Run Failed")
             for card in self.usedcardslist:
                 card.Reset()
 	

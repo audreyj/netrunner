@@ -15,6 +15,7 @@ class Card(object):
         self.currentpoints = 0
         self.takeaction = []
         self.installedin = 0
+        self.hosting = []
         self.player = ''
         self.id = '<None>'
 
@@ -71,8 +72,7 @@ class corpcard(Card):
         maxnum = len(self.player.serverlist) + 1
         madechoice = 0
         while not madechoice:
-            x = self.player.asknum("Choose Server to Install Card in: ",
-                                   1, maxnum + 1)
+            x = self.player.asknum("Choose Server to Install Card in: ", 1, maxnum + 1)
             if x == 'cancel':
                 break
             elif x == maxnum:
@@ -83,7 +83,7 @@ class corpcard(Card):
                 if chosenserver.MoreRoomForCards:
                     if self.player.checkdo(clickcost, 0):
                         self.player.hand.give(self, chosenserver.installed)
-                        self.tellplayer("Putting card in %s" % chosenserver.name)
+                        # self.tellplayer("Putting card in %s" % chosenserver.name)
                         chosenserver.MoreRoomForCards = False
                         madechoice = x
                 else:
@@ -91,7 +91,7 @@ class corpcard(Card):
             elif self.type == 'Upgrade':
                 if self.player.checkdo(clickcost, 0):
                     self.player.hand.give(self, chosenserver.installed)
-                    self.tellplayer("Putting card in %s" % chosenserver.name)
+                    # self.tellplayer("Putting card in %s" % chosenserver.name)
                     madechoice = x
             elif self.type == 'Ice':
                 creditcost = 0
@@ -100,25 +100,27 @@ class corpcard(Card):
                 if self.player.checkdo(clickcost, creditcost):
                     self.player.hand.give(self, chosenserver.Icelist)
                     madechoice = x
-                    self.tellplayer("Installed Ice %s on server: %s" % (self.name, chosenserver.name))
+                    # self.tellplayer("Installed Ice %s on server: %s" % (self.name, chosenserver.name))
         if madechoice:
             self.faceup = False
             self.installedin = madechoice
-            self.player.turnsummary.append('Installed a card in ' + str(chosenserver.name))
+            self.player.gameboard.TurnSummary('Installed a card in ' + str(chosenserver.name))
             if self.player.identity == 'HB' and self.player.firstcall:
                 self.player.firstcall = False
-                self.tellplayer("HB Power: Gain 1 credit")
+                self.player.gameboard.TurnSummary("HB Power: Gain 1 credit")
                 self.player.takecredit(0)
             reply = True
         return reply
 
-    def trashaction(self, faceup=False, location=''):
+    def trashaction(self, faceup=False):
         self.faceup = faceup
         self.currentpoints = 0
+        for hosted in self.hosting:
+            hosted.trashaction()
         if self in self.player.playablecardlist:
             self.player.playablecardlist.remove(self)
-        if location:
-            cardlocation = location
+        # if location:
+        #     cardlocation = location
         elif self.installedin:
             if self.type == 'Ice':
                 cardlocation = self.player.serverlist[self.installedin - 1].Icelist
@@ -138,8 +140,8 @@ class corpcard(Card):
             carddesc = self.name
         else:
             carddesc = "a card facedown"
-        self.player.turnsummary.append('Trashed ' + carddesc)
-        self.tellplayer("Trashed " + str(self))
+        self.player.gameboard.TurnSummary('Trashed ' + carddesc)
+        # self.tellplayer("Trashed " + str(self))
 
 
 class runnercard(Card):
@@ -162,8 +164,8 @@ class runnercard(Card):
             self.player.hand.give(self, self.player.boardhand)
             self.player.memoryused += self.programcost
             self.installedin = 1
+            self.player.gameboard.TurnSummary('Installed ' + str(self))
             self.RezAction()
-            self.player.turnsummary.append('Installed ' + str(self))
             if discount: self.player.firstcall = False
             reply = True
         return reply
@@ -179,6 +181,8 @@ class runnercard(Card):
             self.player.hand.give(self, self.player.archivepile)
         elif self in self.player.boardhand.cards:
             if check and self.player.PreventCheck('trash'): return False
+            for hosted in self.hosting:
+                hosted.trashaction()
             self.player.boardhand.give(self, self.player.archivepile)
             self.player.memoryused -= self.programcost
             for thing in self.takeaction:
@@ -188,8 +192,7 @@ class runnercard(Card):
         self.installedin = 0
         if self in self.player.playablecardlist:
             self.player.playablecardlist.remove(self)
-        self.player.turnsummary.append('Trashed ' + str(self))
-        self.tellplayer("Trashed " + str(self))
+        self.player.gameboard.TurnSummary('Trashed ' + self.name)
 
 
 #=================================================
@@ -281,7 +284,7 @@ class AgendaCard(corpcard):
         self.installedin = 0
         self.advancetotal = 0
         self.type = 'Agenda: Scored'
-        self.player.turnsummary.append('Scored an Agenda: %s' % self.name)
+        self.player.gameboard.TurnSummary('Scored an Agenda: %s' % self.name)
 
 
 class UpgradeCard(corpcard):
@@ -308,8 +311,6 @@ class OperationCard(corpcard):
         reply = False
         clickcost = 1
         if self.player.checkdo(clickcost, self.rezcost):
-            self.tellplayer("You played %s" % self.name)
-            self.player.turnsummary.append('Played ' + self.name)
             self.trashaction(True)
             reply = True
         return reply
@@ -379,7 +380,7 @@ class PadCampaign(AssetCard):
             self.player.TurnStartActions.append(thing)
 
     def reup(self, *args):
-        self.tellplayer("THE POWER OF PAD CAMPAIGN GIVES YOU:")
+        self.player.gameboard.TurnSummary("THE POWER OF PAD CAMPAIGN GIVES CORP 1 CREDIT")
 
 
 class MiningCorp(AssetCard):
@@ -491,7 +492,7 @@ class HedgeFund(OperationCard):
     def cardaction(self):
         if OperationCard.InstallAction(self):
             self.player.numcredits += 9
-            self.tellplayer("You gained 9 credits")
+            self.player.gameboard.TurnSummary("Corp gained 9 credits")
 
 
 defaultcorpdeck = [PadCampaign, PadCampaign, PadCampaign, MiningCorp, MiningCorp, Hunter, Hunter, Enigma, Enigma,
@@ -539,10 +540,9 @@ class AdonisCampaign(AssetCard):
 
     def reup(self, azero):
         self.currentpoints -= 3
-        self.tellplayer("THE POWER OF ADONIS CAMPAIGN GAVE YOU 3 CREDITS")
-        self.tellplayer("(%d tokens left on Adonis Campaign)" % self.currentpoints)
+        self.player.gameboard.TurnSummary("THE POWER OF ADONIS CAMPAIGN GAVE CORP 3 CREDITS")
+        self.player.gameboard.TurnSummary("(%d tokens left on Adonis Campaign)" % self.currentpoints)
         if not self.currentpoints:
-            self.tellplayer("Trashing Adonis Campaign")
             self.trashaction(True)
 
 
@@ -559,7 +559,7 @@ class AggressiveSecretary(AssetCard):
     def RunnerAccessed(self):
         if self.currentpoints:
             self.tellplayer(self.readcard(), 'bothplayers')
-            self.tellplayer("There are %d tokens on Aggressive Secretary" % self.currentpoints, 'bothplayers')
+            self.player.gameboard.TurnSummary("There are %d tokens on Aggressive Secretary" % self.currentpoints)
             question = "CORP PLAYER: pay to activate Aggressive Secretary? > "
             if self.player.yesno(question) and self.player.checkdo(0, 2):
                 for i in range(self.currentpoints):
@@ -576,7 +576,7 @@ class BioticLabor(OperationCard):
     def cardaction(self):
         if OperationCard.InstallAction(self):
             self.player.numclicks += 2
-            self.tellplayer("You gained 2 clicks")
+            self.player.gameboard.TurnSummary("Corp gained 2 clicks")
 
 
 class Shipment(OperationCard):
@@ -670,11 +670,11 @@ class ExpData(UpgradeCard):  #needs updating
         for ice in self.player.serverlist[self.installedin - 1].Icelist.cards:
             ice.icestr += 1
 
-    def trashaction(self, faceup, location=''):
+    def trashaction(self, faceup):
         if self.installedin and self.faceup:
             for ice in self.player.serverlist[self.installedin - 1].Icelist.cards:
                 ice.icestr -= 1
-        corpcard.trashaction(self, faceup, location)
+        corpcard.trashaction(self)
 
 
 class Heimdall(IceCard):
@@ -762,7 +762,7 @@ class SeaSource(OperationCard):
 
     def cardaction(self):
         togs = False
-        for thing in self.player.gameboards.rplayer.TurnSummary:
+        for thing in self.player.gameboards.lastturn:
             if 'run' in thing: togs = True
         if not togs:
             self.tellplayer("Runner did not make a run last turn")
@@ -825,12 +825,12 @@ class SanSan(UpgradeCard):
             if card.type == 'Agenda':
                 card.advancetotal -= 1
 
-    def trashaction(self, faceup, location=''):
+    def trashaction(self):
         if self.installedin and self.faceup:
             for card in self.player.serverlist[self.installedin - 1].installed.cards:
                 if card.type == 'Agenda':
                     card.advancetotal += 1
-        corpcard.trashaction(self, faceup, location)
+        corpcard.trashaction(self)
 
 
 class GhostBranch(AssetCard):
@@ -992,7 +992,7 @@ class AggressiveNegotiation(OperationCard):
 
     def cardaction(self):
         togs = False
-        for thing in self.player.TurnSummary:
+        for thing in self.gameboard.turnsummary:
             if 'Scored' in thing: togs = True
         if not togs:
             self.tellplayer("You haven't scored an agenda this turn")
@@ -1254,7 +1254,7 @@ class Armitage(ResourceCard):
         if self.player.checkdo(1, 0):
             self.player.numcredits += 2
             self.currentpoints -= 2
-            self.tellplayer("You gained 2 credits")
+            self.player.gameboard.TurnSummary("Runner gained 2 credits")
             self.tellplayer("(%d credits left on Armitage Codebusting)" % self.currentpoints)
             if not self.currentpoints:
                 self.trashaction()
@@ -1288,7 +1288,7 @@ class SureGamble(EventCard):
     def cardaction(self):
         if self.player.checkdo(1, self.rezcost):
             self.player.numcredits += 9
-            self.tellplayer("You gained 9 credits")
+            self.player.gameboard.TurnSummary("Runner gained 9 credits")
             self.trashaction()
 
 
@@ -1420,13 +1420,13 @@ class PersonalTouch(HardwareCard):
         self.cardtext = "Install The Personal Touch only on an icebreaker.  Hosted icebreaker has +1 strength"
 
     def RezAction(self):
-        self.player.TurnStartActions.append(self.reup)
         gk = 1
         while gk:
             chosencard = self.player.choosefromboard()
             if 'Icebreaker' in chosencard.subtype:
                 chosencard.icestr += 1
                 self.installedin = chosencard
+                chosencard.hosting.append(self)
                 gk = 0
             else:
                 self.tellplayer("fail!")
@@ -1434,12 +1434,8 @@ class PersonalTouch(HardwareCard):
     def trashaction(self):
         if self.installedin:
             self.installedin.icestr -= 1
+            self.installedin.hosting.remove(self)
         runnercard.trashaction(self)
-
-    def reup(self, azero):
-        if not self.installedin.installedin:
-            self.trashaction(False)
-            self.player.TurnStartActions.remove(self.reup)
 
 
 class RabbitHole(HardwareCard):
@@ -1592,14 +1588,14 @@ class MakersEye(EventCard):
     def cardaction(self):
         if self.player.checkdo(1, self.rezcost):
             self.trashaction()
-            self.player.turnsummary.append('    -> Card effect made a run on R&D')
+            self.player.gameboard.TurnSummary('    -> Card effect made a run on R&D')
             if self.player.gameboard.StartRun(2):
-                self.player.turnsummary.append('    -> Run was successful, accessed extra cards')
+                self.player.gameboard.TurnSummary('    -> Run was successful, accessed extra cards')
                 self.player.gameboard.AccessCards(2, 3)
                 for card in self.player.usedcardslist:
                     card.Reset()
             else:
-                self.player.turnsummary.append('    -> Run Failed')
+                self.player.gameboard.TurnSummary('    -> Run Failed')
 
 
 class MagnumOpus(ProgramCard):
